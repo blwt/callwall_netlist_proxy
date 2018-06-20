@@ -3,7 +3,7 @@
 CallWall is a phone blocker program by NullRiver for the Mac.
 One feature of CallWall is to enable the use of a netlist, http://www.whocalled.net, for its information.
 
-This python 2.5.1 program is a HTTP Web Proxy which redirects the netlist URL to an alternate source.
+This python 2.5.1 program is a HTTP Web Proxy which redirects the netlist URL to a working source.
 
 To enable:
 1) On the Mac, go to System Preferences/Network
