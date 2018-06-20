@@ -4,26 +4,30 @@
 # Changes Netlist to use NomoRobo instead.
 #
 
-import SocketServer
-import SimpleHTTPServer
+import logging
 import re
-import urllib
 import urllib2
 import urlparse
-import StringIO
+
+from SimpleHTTPServer import SimpleHTTPRequestHandler
+from SocketServer import ForkingTCPServer
 
 PORT = 8080
 
-class Proxy(SimpleHTTPServer.SimpleHTTPRequestHandler):
+class Proxy(SimpleHTTPRequestHandler):
+
     def do_GET(self):
+        logging.debug('Processing %s', self.path)
         url = urlparse.urlparse(self.path)
+
         if url.netloc == 'www.whocalled.us':
             request = 'https://www.nomorobo.com/lookup/%s' % (url.query[url.query.rfind('=')+1:],)
 
             try:
                 response = urllib2.urlopen(request)
+                html_response = response.read()
 
-                match = re.findall('(?i)do not answer', response.read())
+                match = re.findall('(?i)do not answer', html_response)
                 if match:
                     score=11
                 else:
@@ -32,13 +36,18 @@ class Proxy(SimpleHTTPServer.SimpleHTTPRequestHandler):
             except urllib2.HTTPError, e:
                 score=0
 
-            print '%s -> %s' % (request, score)
-            self.copyfile(StringIO.StringIO('success=1&score=%d' % (score,)), self.wfile)
+            logging.info('%s -> %s', request, score)
+            self.wfile.write('success=1&score=%d' % (score,))
 
         else:
-            self.copyfile(urllib.urlopen(self.path), self.wfile)
+            self.send_response(404)
+            self.wfile.write('Unsupported')
 
 if __name__ == '__main__':
-    httpd = SocketServer.ForkingTCPServer(('', PORT), Proxy)
-    print 'Listening at port: %d' % (PORT,)
+    logging.basicConfig(
+        level=logging.DEBUG,
+        handlers=[logging.StreamHandler()])
+
+    httpd = ForkingTCPServer(('', PORT), Proxy)
+    logging.info('Listening at port: %d', PORT)
     httpd.serve_forever()
