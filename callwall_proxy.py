@@ -1,7 +1,7 @@
 #!/usr/bin/python
-# HTTP Proxy for the CallWall program by NullRiver,
+#
+# HTTP Proxy to update the netlist URL for the CallWall program by NullRiver,
 #     http://www.nullriver.com/products/callwall
-# Changes Netlist to use NomoRobo instead.
 #
 
 import logging
@@ -17,6 +17,7 @@ PORT = 8080
 class Proxy(SimpleHTTPRequestHandler):
 
     def do_GET(self):
+
         logging.debug('Processing %s', self.path)
         url = urlparse.urlparse(self.path)
 
@@ -40,13 +41,22 @@ class Proxy(SimpleHTTPRequestHandler):
             self.wfile.write('success=1&score=%d' % (score,))
 
         else:
-            self.send_response(404)
-            self.wfile.write('Unsupported')
+            try:
+                self.copyfile(urllib2.urlopen(self.path), self.wfile)                
+            except urllib2.HTTPError, e:
+                self.send_response(e.code)
+            except urllib2.URLError, e:
+                self.send_response(404)
 
 if __name__ == '__main__':
     logging.basicConfig(
         level=logging.DEBUG,
         handlers=[logging.StreamHandler()])
+
+    # Turn off proxy
+    proxy_handler = urllib2.ProxyHandler({})
+    opener = urllib2.build_opener(proxy_handler)
+    urllib2.install_opener(opener)
 
     httpd = ForkingTCPServer(('', PORT), Proxy)
     logging.info('Listening at port: %d', PORT)
