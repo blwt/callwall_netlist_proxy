@@ -1,11 +1,9 @@
 #!/usr/bin/python
-#
-# HTTP Proxy to update the netlist URL for the CallWall program by NullRiver,
-#     http://www.nullriver.com/products/callwall
-#
 
+import cgi
 import logging
 import re
+import urllib
 import urllib2
 import urlparse
 
@@ -14,49 +12,70 @@ from SocketServer import ForkingTCPServer
 
 PORT = 8080
 
+"""
+HTTP Proxy class to redirect the obsolete netlist URL for
+the CallWall program by NullRiver,
+     http://www.nullriver.com/products/callwall
+"""
 class Proxy(SimpleHTTPRequestHandler):
 
-    def do_GET(self):
-
-        logging.debug('Processing %s', self.path)
+    def do_netlist (self):
+        """
+        Process the CallWall netlist URL
+        :return: True if CallWall netlist URL was detected and processed.
+                 False if not.
+        """
         url = urlparse.urlparse(self.path)
 
-        if url.netloc == 'www.whocalled.us':
-            request = 'https://www.nomorobo.com/lookup/%s' % (url.query[url.query.rfind('=')+1:],)
+        if url.scheme != 'http' or \
+            url.netloc != 'www.whocalled.us' or \
+            url.path != '/do':
+            return False
 
-            try:
-                response = urllib2.urlopen(request)
-                html_response = response.read()
+        query = cgi.parse_qs(url.query)
+        if query.get('action') != ['getScore'] or \
+            query.get('name') != ['callwall'] or \
+            query.get('pass') != ['callwall']:
+            return False
 
-                match = re.findall('(?i)do not answer', html_response)
-                if match:
-                    score=11
-                else:
-                    score=6
+        phoneNumbers = query.get('phoneNumber')
+        if not phoneNumbers or len(phoneNumbers) != 1:
+            return False
 
-            except urllib2.HTTPError, e:
-                score=0
+        request = 'https://www.nomorobo.com/lookup/%s' % (phoneNumbers[0])
 
-            logging.info('%s -> %s', request, score)
-            self.wfile.write('success=1&score=%d' % (score,))
+        try:
+            response = urllib2.urlopen(request)
+            html_response = response.read()
 
-        else:
-            try:
-                self.copyfile(urllib2.urlopen(self.path), self.wfile)                
-            except urllib2.HTTPError, e:
-                self.send_response(e.code)
-            except urllib2.URLError, e:
-                self.send_response(404)
+            match = re.findall('(?i)do not answer', html_response)
+            if match:
+                score=11
+            else:
+                score=6
+
+        except urllib2.HTTPError, e:
+            score=0
+
+        logging.info('%s -> %s', request, score)
+        self.wfile.write('success=1&score=%d' % (score,))
+
+        return True
+
+    def do_GET(self):
+        """
+        Process the HTTP GET Request
+        """
+
+        logging.debug('Processing %s', self.path)
+
+        if not self.do_netlist():
+            self.copyfile(urllib.urlopen(self.path, proxies={}), self.wfile)
 
 if __name__ == '__main__':
     logging.basicConfig(
         level=logging.DEBUG,
         handlers=[logging.StreamHandler()])
-
-    # Turn off proxy
-    proxy_handler = urllib2.ProxyHandler({})
-    opener = urllib2.build_opener(proxy_handler)
-    urllib2.install_opener(opener)
 
     httpd = ForkingTCPServer(('', PORT), Proxy)
     logging.info('Listening at port: %d', PORT)
