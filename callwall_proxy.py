@@ -7,10 +7,9 @@ import urllib
 import urllib2
 import urlparse
 
+from optparse import OptionParser
 from SimpleHTTPServer import SimpleHTTPRequestHandler
 from SocketServer import ForkingTCPServer
-
-PORT = 8080
 
 """
 HTTP Proxy class to redirect the obsolete netlist URL for
@@ -73,10 +72,19 @@ class Proxy(SimpleHTTPRequestHandler):
             self.copyfile(urllib.urlopen(self.path, proxies={}), self.wfile)
 
 if __name__ == '__main__':
+
+    parser = OptionParser()
+    parser.add_option('-p', '--port', type='int', help='Listening port number', default=8080)
+    parser.add_option('-v', '--verbose', type='choice', action='store',
+        choices=[k.lower() for k in logging._levelNames.keys() if isinstance(k, basestring)],
+        default=logging.getLevelName(logging.INFO).lower(),
+        help='Set the verbosity of the log level')
+    options, args = parser.parse_args()
+
     logging.basicConfig(
-        level=logging.DEBUG,
+        level=logging.getLevelName(options.verbose.upper()),
         handlers=[logging.StreamHandler()])
 
-    httpd = ForkingTCPServer(('', PORT), Proxy)
-    logging.info('Listening at port: %d', PORT)
+    httpd = ForkingTCPServer(('', options.port), Proxy)
+    logging.info('Listening at port: %d', options.port)
     httpd.serve_forever()
